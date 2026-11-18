@@ -138,8 +138,24 @@ select.in option{background:#18181C}
 .model[aria-pressed="true"] span{color:#FF8A84}
 .sizes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
 @media (max-width:380px){.sizes{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.chip{height:44px;border-radius:12px;border:1px solid var(--line2);background:rgba(0,0,0,.3);color:var(--soft);font-family:Kanit,sans-serif;font-weight:500;font-size:14px;transition:all .18s var(--ease)}
+.chip{height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;padding:0 2px;border-radius:12px;border:1px solid var(--line2);background:rgba(0,0,0,.3);color:var(--soft);font-family:Kanit,sans-serif;font-weight:500;font-size:14px;transition:all .18s var(--ease)}
 .chip:hover{border-color:rgba(255,255,255,.3);color:var(--text)}
+.chip small{font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:400;color:var(--muted);white-space:nowrap}
+.chip[aria-pressed="true"] small{color:#3F3F46;font-weight:500}
+.sizehead{display:flex;justify-content:space-between;align-items:center;margin-bottom:-6px}
+.linkbtn{min-height:44px;margin:-10px 0;padding:0 2px;border:0;background:none;color:var(--red-text);font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.linkbtn:hover{text-decoration:underline}
+.sizeinfo{font-size:13px;color:var(--muted)}
+.sizeinfo b{color:var(--text);font-weight:600}
+.modal{position:fixed;inset:0;z-index:55;background:rgba(5,5,6,.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;padding:16px;animation:fade .2s}
+@media (min-width:600px){.modal{align-items:center}}
+.modal-card{width:min(440px,100%);max-height:88vh;overflow:auto;background:var(--surface2);border:1px solid var(--line2);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 70px rgba(0,0,0,.5);animation:in .3s var(--ease)}
+.sztable{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
+.sztable th{font-size:12.5px;font-weight:600;color:var(--muted);padding:8px 6px;border-bottom:1px solid var(--line2);text-align:center}
+.sztable td{padding:10px 6px;text-align:center;border-bottom:1px solid var(--line)}
+.sztable td:first-child{font-family:Kanit,sans-serif;font-weight:600}
+.sztable tr.sel td{background:var(--red-tint);color:#fff}
+.sztable tr.sel td:first-child{color:var(--red-text)}
 .chip[aria-pressed="true"]{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:700;transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.4)}
 .namenum{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:10px}
 .preview{border-radius:var(--r-md);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:
@@ -516,6 +532,13 @@ details pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.4)
   </section>
 </div>
 
+<div class="modal" id="sizeModal" role="dialog" aria-modal="true" aria-labelledby="szTitle" hidden>
+  <div class="modal-card">
+    <div class="row"><h2 id="szTitle">ตารางไซซ์</h2><button type="button" class="iconbtn" id="szClose" aria-label="ปิดตารางไซซ์"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <span class="hint">หน่วยเป็นนิ้ว · รอบอกวัดรอบตัวเสื้อ</span>
+    <table class="sztable"><thead><tr><th scope="col">ไซซ์</th><th scope="col">รอบอก</th><th scope="col">ความยาว</th></tr></thead><tbody id="szBody"></tbody></table>
+  </div>
+</div>
 <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="ภาพเสื้อ" hidden>
   <img id="lbImg" alt="">
   <button type="button" id="lbClose" class="lb-x" aria-label="ปิด"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
@@ -543,6 +566,9 @@ const MODELS = {
   GOALKEEPER:{name:'GOALKEEPER JERSEY',price:329,img:'img/goalkeeper.webp',full:'img/goalkeeper-full.webp',back:'img/goalkeeper-back.webp',backFull:'img/goalkeeper-back-full.webp'}
 };
 const SIZES = ['SS','S','M','L','XL','2XL','3XL','4XL','5XL','6XL','7XL','8XL'];
+// ตารางไซซ์ (นิ้ว): [รอบอก, ความยาว]
+const SIZE_CHART = {SS:[34,26],S:[36,26],M:[38,27],L:[40,28],XL:[42,29],'2XL':[44,30],'3XL':[46,30],'4XL':[48,31],'5XL':[50,31.5],'6XL':[52,31.5],'7XL':[54,31.5],'8XL':[56,31.5]};
+function sizeInfoHTML(sz){ if(!sz||!SIZE_CHART[sz]) return 'เลือกไซซ์ · ตัวเลขใต้ไซซ์คือรอบอก (นิ้ว)'; const [c,l]=SIZE_CHART[sz]; return `ไซซ์ <b>${sz}</b> · รอบอก <b>${c}"</b> · ความยาว <b>${l}"</b>`; }
 const SHIP_FEE = 50;
 const PROVINCES = ['กรุงเทพมหานคร','กระบี่','กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร','ขอนแก่น','จันทบุรี','ฉะเชิงเทรา','ชลบุรี','ชัยนาท','ชัยภูมิ','ชุมพร','เชียงราย','เชียงใหม่','ตรัง','ตราด','ตาก','นครนายก','นครปฐม','นครพนม','นครราชสีมา','นครศรีธรรมราช','นครสวรรค์','นนทบุรี','นราธิวาส','น่าน','บึงกาฬ','บุรีรัมย์','ปทุมธานี','ประจวบคีรีขันธ์','ปราจีนบุรี','ปัตตานี','พระนครศรีอยุธยา','พะเยา','พังงา','พัทลุง','พิจิตร','พิษณุโลก','เพชรบุรี','เพชรบูรณ์','แพร่','ภูเก็ต','มหาสารคาม','มุกดาหาร','แม่ฮ่องสอน','ยโสธร','ยะลา','ร้อยเอ็ด','ระนอง','ระยอง','ราชบุรี','ลพบุรี','ลำปาง','ลำพูน','เลย','ศรีสะเกษ','สกลนคร','สงขลา','สตูล','สมุทรปราการ','สมุทรสงคราม','สมุทรสาคร','สระแก้ว','สระบุรี','สิงห์บุรี','สุโขทัย','สุพรรณบุรี','สุราษฎร์ธานี','สุรินทร์','หนองคาย','หนองบัวลำภู','อ่างทอง','อำนาจเจริญ','อุดรธานี','อุตรดิตถ์','อุทัยธานี','อุบลราชธานี'];
 // Demo: เขตของกรุงเทพฯ ครบ 50 เขต; จังหวัดอื่นพิมพ์ชื่ออำเภอเอง (เวอร์ชันจริงควรใช้ฐานข้อมูลที่อยู่ไทยแบบเต็ม)
@@ -627,8 +653,9 @@ function renderItems(){
           ${Object.keys(MODELS).map(k=>`<button type="button" class="model" data-act="model" data-v="${k}" aria-pressed="${it.model===k}"><img src="${MODELS[k].img}" alt=""><span style="display:flex;flex-direction:column"><b>${k}</b><span>${baht(MODELS[k].price)}</span></span></button>`).join('')}
         </div>
       </div>
-      <div class="field"><span class="lbl">ขนาด <span class="req">*</span></span>
-        <div class="sizes">${SIZES.map(s=>`<button type="button" class="chip" data-act="size" data-v="${s}" aria-pressed="${it.size===s}">${s}</button>`).join('')}</div>
+      <div class="field"><div class="sizehead"><span class="lbl">ขนาด <span class="req">*</span></span><button type="button" class="linkbtn" data-act="sizechart"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h18v8H3z"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/></svg>ตารางไซซ์</button></div>
+        <div class="sizes">${SIZES.map(s=>`<button type="button" class="chip" data-act="size" data-v="${s}" aria-pressed="${it.size===s}" aria-label="ไซซ์ ${s} รอบอก ${SIZE_CHART[s][0]} นิ้ว">${s}<small>อก ${SIZE_CHART[s][0]}"</small></button>`).join('')}</div>
+        <div class="sizeinfo" data-sizeinfo>${sizeInfoHTML(it.size)}</div>
         <div class="err" data-err="size"></div>
       </div>
       <div class="namenum">
@@ -661,7 +688,8 @@ $('items').addEventListener('click',e=>{
   if(act==='model'){ f.it.model=b.dataset.v; f.card.querySelectorAll('[data-act="model"]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===f.it.model)); refreshSub(f); return; }
   if(act==='size'){ f.it.size=b.dataset.v;
     f.card.querySelectorAll('[data-act="size"]').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===f.it.size));
-    f.card.querySelector('[data-err="size"]').textContent=''; refreshSub(f); }
+    f.card.querySelector('[data-err="size"]').textContent=''; f.card.querySelector('[data-sizeinfo]').innerHTML=sizeInfoHTML(f.it.size); refreshSub(f); }
+  if(act==='sizechart'){ openSizeChart(f.it.size, b); }
 });
 $('items').addEventListener('input',e=>{
   const t=e.target; const f=findItem(t); if(!f) return;
@@ -911,6 +939,17 @@ function route(){
 }
 window.addEventListener('hashchange',route);
 $('stBack').addEventListener('click',e=>{ e.preventDefault(); try{ history_replace(); }catch(_){} go(state.step); });
+
+/* size chart modal */
+let szReturn=null;
+function openSizeChart(sel, from){
+  $('szBody').innerHTML=SIZES.map(s=>`<tr class="${s===sel?'sel':''}"><td>${s}</td><td>${SIZE_CHART[s][0]}"</td><td>${SIZE_CHART[s][1]}"</td></tr>`).join('');
+  szReturn=from||document.activeElement; $('sizeModal').hidden=false; $('szClose').focus();
+}
+function closeSizeChart(){ $('sizeModal').hidden=true; if(szReturn) szReturn.focus(); }
+$('szClose').addEventListener('click',closeSizeChart);
+$('sizeModal').addEventListener('click',e=>{ if(e.target.id==='sizeModal') closeSizeChart(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('sizeModal').hidden) closeSizeChart(); });
 
 /* lightbox */
 let lbReturn=null;
