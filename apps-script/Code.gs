@@ -8,6 +8,13 @@
  *  - ให้หน้าเว็บเช็กสถานะออเดอร์ได้ (GET ?order=...&phone=...)
  *
  * ตั้งค่า: แก้ SLIP_FOLDER_ID ด้านล่าง แล้วรันฟังก์ชัน setup() หนึ่งครั้ง
+ *
+ * แจ้งเตือนออเดอร์ใหม่ (ไม่บังคับ) — ตั้งใน Apps Script: ⚙️ การตั้งค่าโปรเจ็กต์ → คุณสมบัติของสคริปต์
+ *   NOTIFY_EMAIL  = อีเมลที่จะรับแจ้งเตือน (คั่นหลายอีเมลด้วยจุลภาค)
+ *   LINE_TOKEN    = Channel access token (long-lived) ของ LINE OA
+ *   LINE_TO       = User ID ของแอดมิน (ขึ้นต้นด้วย U...)
+ *   ไม่ใส่ค่าไหน = ปิดช่องทางนั้น · ทดสอบได้ด้วยฟังก์ชัน testNotify()
+ *   (เก็บไว้ในคุณสมบัติของสคริปต์ ไม่ใส่ในโค้ด เพราะโค้ดชุดนี้อยู่ใน GitHub สาธารณะ)
  */
 
 const SLIP_FOLDER_ID = 'ใส่_ID_โฟลเดอร์_Google_Drive_ที่นี่';
@@ -65,6 +72,8 @@ function doPost(e) {
     const itemsSheet = ss.getSheetByName(ITEMS_SHEET);
     itemsSheet.getRange(itemsSheet.getLastRow() + 1, 1, itemRows.length, ITEM_HEADERS.length).setValues(itemRows);
     SpreadsheetApp.flush();
+    lock.releaseLock();
+    notify_({ orderNo, name: clean.name, phone: clean.phone, delivery: clean.delivery, address: clean.address, itemsText, count: clean.items.length, total: clean.total, note: clean.note, slipUrl });
 
     return json_({ ok: true, orderNo, total: clean.total, status: 'รอตรวจสอบสลิป' });
   } catch (err) {
@@ -138,6 +147,44 @@ function saveSlip_(dataUrl, orderNo) {
   const ext = m[1].split('/')[1].replace('jpeg', 'jpg');
   const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], `slip_${orderNo}.${ext}`);
   return DriveApp.getFolderById(SLIP_FOLDER_ID).createFile(blob).getUrl();
+}
+
+/** ส่งแจ้งเตือนออเดอร์ใหม่ (ถ้าส่งไม่สำเร็จ ออเดอร์ยังบันทึกปกติ) */
+function notify_(o) {
+  const props = PropertiesService.getScriptProperties();
+  const email = props.getProperty('NOTIFY_EMAIL');
+  const token = props.getProperty('LINE_TOKEN');
+  const to = props.getProperty('LINE_TO');
+  const addr = o.address && o.address.address ? `\n📍 ${o.address.address} อ.${o.address.district} จ.${o.address.province} ${o.address.zip}` : '';
+  const text = `🛒 ออเดอร์ใหม่ ${o.orderNo}\n` +
+    `👤 ${o.name} · ${o.phone}\n` +
+    `👕 ${o.count} ตัว\n${o.itemsText}\n` +
+    `🚚 ${o.delivery}${addr}\n` +
+    (o.note ? `📝 ${o.note}\n` : '') +
+    `💰 ยอด ฿${Number(o.total).toLocaleString('en-US')}\n` +
+    `📎 สลิป: ${o.slipUrl}`;
+
+  if (email) {
+    try {
+      MailApp.sendEmail({ to: email, subject: `🛒 ออเดอร์ใหม่ ${o.orderNo} · ฿${o.total}`, body: text + '\n\nเปิดชีต: ' + SpreadsheetApp.getActiveSpreadsheet().getUrl() });
+    } catch (err) { console.error('email notify failed', err); }
+  }
+  if (token && to) {
+    try {
+      const res = UrlFetchApp.fetch('https://api.line.me/v2/bot/message/push', {
+        method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+        headers: { Authorization: 'Bearer ' + token },
+        payload: JSON.stringify({ to: to, messages: [{ type: 'text', text: text.slice(0, 4900) }] })
+      });
+      if (res.getResponseCode() !== 200) console.error('LINE notify failed', res.getResponseCode(), res.getContentText());
+    } catch (err) { console.error('LINE notify failed', err); }
+  }
+}
+
+/** รันเพื่อทดสอบการแจ้งเตือน (ไม่บันทึกอะไรลงชีต) */
+function testNotify() {
+  notify_({ orderNo: 'TEST-0', name: 'ทดสอบ ระบบ', phone: '0800000000', delivery: 'รับที่งาน', address: null,
+    itemsText: '1) FANCLUB JERSEY M SUPAWIT #10', count: 1, total: 399, note: '', slipUrl: '(ทดสอบ)' });
 }
 
 function json_(obj) {
