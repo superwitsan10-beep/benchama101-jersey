@@ -57,11 +57,11 @@ function doPost(e) {
       `${i + 1}) ${it.model} ${it.size}${it.name ? ' ' + it.name : ''}${it.number !== '' ? ' #' + it.number : ''}`).join('\n');
 
     ss.getSheetByName(ORDERS_SHEET).appendRow([
-      orderNo, now, 'รอตรวจสอบสลิป', clean.name, "'" + clean.phone, clean.delivery,
-      clean.address.address, clean.address.district, clean.address.province, clean.address.zip ? "'" + clean.address.zip : '',
-      clean.note, itemsText, clean.items.length, clean.subtotal, clean.shipping, clean.total, slipUrl
+      orderNo, now, 'รอตรวจสอบสลิป', safeCell_(clean.name), "'" + clean.phone, clean.delivery,
+      safeCell_(clean.address.address), safeCell_(clean.address.district), clean.address.province, clean.address.zip ? "'" + clean.address.zip : '',
+      safeCell_(clean.note), itemsText, clean.items.length, clean.subtotal, clean.shipping, clean.total, slipUrl
     ]);
-    const itemRows = clean.items.map((it, i) => [orderNo, i + 1, it.model, it.size, it.name, it.number === '' ? '' : "'" + it.number, it.price, clean.name, clean.delivery, 'รอตรวจสอบสลิป']);
+    const itemRows = clean.items.map((it, i) => [orderNo, i + 1, it.model, it.size, safeCell_(it.name), it.number === '' ? '' : "'" + it.number, it.price, clean.name, clean.delivery, 'รอตรวจสอบสลิป']);
     const itemsSheet = ss.getSheetByName(ITEMS_SHEET);
     itemsSheet.getRange(itemsSheet.getLastRow() + 1, 1, itemRows.length, ITEM_HEADERS.length).setValues(itemRows);
     SpreadsheetApp.flush();
@@ -106,7 +106,7 @@ function validate_(d) {
     if (SIZES.indexOf(it.size) === -1) throw new Error('ไซซ์ไม่ถูกต้อง');
     const number = String(it.number == null ? '' : it.number).trim();
     if (number !== '' && !/^\d{1,3}$/.test(number)) throw new Error('หมายเลขต้องอยู่ระหว่าง 0–999');
-    return { model: MODEL_NAMES[key], size: it.size, name: String(it.name || '').toUpperCase().slice(0, 15), number, price: PRICES[key] };
+    return { model: MODEL_NAMES[key], size: it.size, name: Array.from(String(it.name || '').trim()).slice(0, 20).join(''), number, price: PRICES[key] };
   });
 
   const ship = d.delivery === 'ship';
@@ -138,6 +138,12 @@ function saveSlip_(dataUrl, orderNo) {
   const ext = m[1].split('/')[1].replace('jpeg', 'jpg');
   const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], `slip_${orderNo}.${ext}`);
   return DriveApp.getFolderById(SLIP_FOLDER_ID).createFile(blob).getUrl();
+}
+
+/** กันข้อความที่ขึ้นต้นด้วย = + - @ ไม่ให้ชีตตีความเป็นสูตร */
+function safeCell_(v) {
+  const s = String(v == null ? '' : v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
 }
 
 function json_(obj) {
