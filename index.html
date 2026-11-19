@@ -300,10 +300,34 @@ details pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.4)
 @keyframes sp-pop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
 @keyframes sp-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
+
+/* ===== liquid glass background: #000000 → #FF0000 ===== */
+body::before{display:none}
+html,body{background:#000000}
+.liquid{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#000000}
+.liquid i{position:absolute;display:block;filter:blur(50px);will-change:transform,border-radius;animation:liquid 20s ease-in-out infinite alternate}
+.liquid i:nth-child(1){width:75vmax;height:75vmax;left:-25vmax;top:-30vmax;background:radial-gradient(circle at 45% 45%,#FF0000 0%,rgba(255,0,0,.6) 38%,rgba(255,0,0,0) 70%);border-radius:42% 58% 63% 37%/45% 40% 60% 55%}
+.liquid i:nth-child(2){width:65vmax;height:65vmax;right:-28vmax;bottom:-30vmax;background:radial-gradient(circle at 50% 50%,#FF0000 0%,rgba(255,0,0,.55) 40%,rgba(255,0,0,0) 70%);animation-duration:26s;animation-direction:alternate-reverse}
+.liquid i:nth-child(3){width:45vmax;height:45vmax;left:35%;top:30%;background:radial-gradient(circle,rgba(170,0,0,.85) 0%,rgba(170,0,0,0) 70%);animation-duration:32s}
+.liquid i:nth-child(4){width:50vmax;height:50vmax;left:-10vmax;bottom:-15vmax;background:radial-gradient(circle,#000000 0%,rgba(0,0,0,.9) 45%,rgba(0,0,0,0) 70%);animation-duration:24s;animation-direction:alternate-reverse}
+.liquid::after{content:"";position:absolute;inset:0;
+  backdrop-filter:blur(28px) saturate(150%);-webkit-backdrop-filter:blur(28px) saturate(150%);
+  background:
+    linear-gradient(125deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 28%,rgba(255,255,255,0) 60%,rgba(255,255,255,.05) 78%,rgba(255,255,255,0) 100%),
+    radial-gradient(ellipse at 50% 40%,rgba(0,0,0,0) 30%,rgba(0,0,0,.55) 100%),
+    rgba(0,0,0,.22)}
+.col > div > .eyebrow{color:#FFC9C5;text-shadow:0 1px 10px rgba(0,0,0,.75)}
+.col > div > h1{text-shadow:0 2px 18px rgba(0,0,0,.45)}
+@keyframes liquid{
+  0%{transform:translate(0,0) rotate(0deg) scale(1);border-radius:42% 58% 63% 37%/45% 40% 60% 55%}
+  50%{transform:translate(7vmax,5vmax) rotate(45deg) scale(1.1);border-radius:58% 42% 38% 62%/55% 62% 38% 45%}
+  100%{transform:translate(-5vmax,9vmax) rotate(90deg) scale(.94);border-radius:38% 62% 55% 45%/62% 36% 64% 38%}}
+
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.check path{stroke-dashoffset:0}}
 </style>
 </head>
 <body>
+<div class="liquid" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 <div class="splash" id="splash" role="status" aria-label="กำลังโหลด">
   <div class="sp-logo"><span class="sp-track"></span><span class="sp-ring"></span><img src="img/logo.png" alt=""></div>
   <div class="sp-text"><b>BENCHAMA101</b><span>JERSEY PRE-ORDER</span></div>
