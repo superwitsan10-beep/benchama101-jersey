@@ -61,9 +61,11 @@ function doPost(e) {
       safeCell_(clean.address.address), safeCell_(clean.address.district), clean.address.province, clean.address.zip ? "'" + clean.address.zip : '',
       safeCell_(clean.note), itemsText, clean.items.length, clean.subtotal, clean.shipping, clean.total, slipUrl
     ]);
-    const itemRows = clean.items.map((it, i) => [orderNo, i + 1, it.model, it.size, safeCell_(it.name), it.number === '' ? '' : "'" + it.number, it.price, clean.name, clean.delivery, 'รอตรวจสอบสลิป']);
     const itemsSheet = ss.getSheetByName(ITEMS_SHEET);
-    itemsSheet.getRange(itemsSheet.getLastRow() + 1, 1, itemRows.length, ITEM_HEADERS.length).setValues(itemRows);
+    const startRow = itemsSheet.getLastRow() + 1;
+    // คอลัมน์ "สถานะ" ใน Items ดึงจาก Orders อัตโนมัติ (แก้สถานะที่ Orders ที่เดียว)
+    const itemRows = clean.items.map((it, i) => [orderNo, i + 1, it.model, it.size, safeCell_(it.name), it.number === '' ? '' : "'" + it.number, it.price, safeCell_(clean.name), clean.delivery, statusFormula_(startRow + i)]);
+    itemsSheet.getRange(startRow, 1, itemRows.length, ITEM_HEADERS.length).setValues(itemRows);
     SpreadsheetApp.flush();
 
     return json_({ ok: true, orderNo, total: clean.total, status: 'รอตรวจสอบสลิป' });
@@ -138,6 +140,22 @@ function saveSlip_(dataUrl, orderNo) {
   const ext = m[1].split('/')[1].replace('jpeg', 'jpg');
   const blob = Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], `slip_${orderNo}.${ext}`);
   return DriveApp.getFolderById(SLIP_FOLDER_ID).createFile(blob).getUrl();
+}
+
+/** สูตรดึงสถานะจากชีต Orders ตามเลขออเดอร์ในคอลัมน์ A ของแถวนั้น */
+function statusFormula_(row) {
+  return `=IFERROR(VLOOKUP($A${row},${ORDERS_SHEET}!$A:$C,${STATUS_COL},FALSE),"")`;
+}
+
+/** รันครั้งเดียว: เปลี่ยนคอลัมน์สถานะของแถวเดิมใน Items ให้ดึงจาก Orders อัตโนมัติ */
+function fixItemsStatus() {
+  const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ITEMS_SHEET);
+  const last = sh.getLastRow();
+  if (last < 2) return;
+  const col = ITEM_HEADERS.indexOf('สถานะ') + 1;
+  const formulas = [];
+  for (let r = 2; r <= last; r++) formulas.push([statusFormula_(r)]);
+  sh.getRange(2, col, formulas.length, 1).setFormulas(formulas);
 }
 
 /** กันข้อความที่ขึ้นต้นด้วย = + - @ ไม่ให้ชีตตีความเป็นสูตร */
