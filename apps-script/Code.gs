@@ -158,6 +158,117 @@ function fixItemsStatus() {
   sh.getRange(2, col, formulas.length, 1).setFormulas(formulas);
 }
 
+/* ===================== SUMMARY ===================== */
+const SUMMARY_SHEET = 'Summary';
+const SCREEN_SHEET = 'รายชื่อสกรีน';
+const EXCLUDE_STATUS = ['ยกเลิก', 'สลิปไม่ถูกต้อง'];   // ไม่นับในยอด
+const PAID_STATUS = ['ชำระแล้ว', 'จัดส่งแล้ว', 'รับสินค้าแล้ว'];
+const ALL_STATUS = ['รอตรวจสอบสลิป', 'ชำระแล้ว', 'สลิปไม่ถูกต้อง', 'จัดส่งแล้ว', 'รับสินค้าแล้ว', 'ยกเลิก'];
+
+/**
+ * รันครั้งเดียว (รันซ้ำได้ จะสร้างใหม่ทับของเดิม): สร้างแท็บ Summary และ รายชื่อสกรีน
+ * ทุกช่องเป็นสูตร ตัวเลขอัปเดตเองเมื่อมีออเดอร์ใหม่หรือแก้สถานะในแท็บ Orders
+ */
+function setupSummary() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  buildSummary_(ss);
+  buildScreenList_(ss);
+}
+
+function buildSummary_(ss) {
+  const sh = ss.getSheetByName(SUMMARY_SHEET) || ss.insertSheet(SUMMARY_SHEET, 0);
+  sh.clear(); sh.clearFormats();
+  const RED = '#E5251F', DARK = '#18181B', SOFT = '#FDECEC';
+  const ex = EXCLUDE_STATUS.map(s => `,Items!$J$2:$J,"<>${s}"`).join('');
+  const exO = EXCLUDE_STATUS.map(s => `,Orders!$C$2:$C,"<>${s}"`).join('');
+  const models = Object.keys(MODEL_NAMES).map(k => MODEL_NAMES[k]);
+  const lastCol = SIZES.length + 2; // แบบ + ไซซ์ + รวม
+
+  sh.getRange(1, 1).setValue('สรุปยอดพรีออเดอร์ BENCHAMA101').setFontSize(16).setFontWeight('bold');
+  sh.getRange(2, 1).setValue('นับทุกออเดอร์ ยกเว้น "' + EXCLUDE_STATUS.join('" และ "') + '" · อัปเดตอัตโนมัติจากแท็บ Orders / Items').setFontColor('#71717A');
+
+  // 1) แบบ × ไซซ์
+  let r = 4;
+  sh.getRange(r, 1).setValue('ยอดเสื้อแยกตามแบบ × ไซซ์ (สำหรับสั่งผลิต)').setFontWeight('bold').setFontSize(12);
+  r++;
+  const head = ['แบบ'].concat(SIZES, ['รวม']);
+  sh.getRange(r, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground(RED).setFontColor('#FFFFFF').setHorizontalAlignment('center');
+  const headRow = r;
+  models.forEach((m, i) => {
+    const row = headRow + 1 + i;
+    const vals = [m];
+    SIZES.forEach((s, j) => {
+      const col = colLetter_(j + 2);
+      vals.push(`=COUNTIFS(Items!$C$2:$C,$A${row},Items!$D$2:$D,${col}$${headRow}${ex})`);
+    });
+    vals.push(`=SUM(B${row}:${colLetter_(SIZES.length + 1)}${row})`);
+    sh.getRange(row, 1, 1, vals.length).setValues([vals]);
+  });
+  const totalRow = headRow + models.length + 1;
+  const tot = ['รวมทุกแบบ'];
+  for (let c = 2; c <= lastCol; c++) { const L = colLetter_(c); tot.push(`=SUM(${L}${headRow + 1}:${L}${totalRow - 1})`); }
+  sh.getRange(totalRow, 1, 1, tot.length).setValues([tot]).setFontWeight('bold').setBackground(SOFT);
+  sh.getRange(headRow + 1, 2, models.length + 1, lastCol - 1).setHorizontalAlignment('center');
+  sh.getRange(headRow + 1, lastCol, models.length + 1, 1).setFontWeight('bold');
+  sh.getRange(headRow, 1, models.length + 2, lastCol).setBorder(true, true, true, true, true, true, '#D4D4D8', SpreadsheetApp.BorderStyle.SOLID);
+
+  // 2) ภาพรวม
+  r = totalRow + 3;
+  sh.getRange(r, 1).setValue('ภาพรวม').setFontWeight('bold').setFontSize(12);
+  const paid = PAID_STATUS.map(s => `SUMIFS(Orders!$P$2:$P,Orders!$C$2:$C,"${s}")`).join('+');
+  const overview = [
+    ['จำนวนออเดอร์', `=COUNTIFS(Orders!$A$2:$A,"?*"${exO})`, 'ออเดอร์'],
+    ['จำนวนเสื้อ', `=SUMIFS(Orders!$M$2:$M,Orders!$A$2:$A,"?*"${exO})`, 'ตัว'],
+    ['ค่าเสื้อ', `=SUMIFS(Orders!$N$2:$N,Orders!$A$2:$A,"?*"${exO})`, 'บาท'],
+    ['ค่าจัดส่ง', `=SUMIFS(Orders!$O$2:$O,Orders!$A$2:$A,"?*"${exO})`, 'บาท'],
+    ['ยอดรวมทั้งหมด', `=SUMIFS(Orders!$P$2:$P,Orders!$A$2:$A,"?*"${exO})`, 'บาท'],
+    ['ยอดที่ชำระแล้ว', `=${paid}`, 'บาท'],
+    ['รับที่งาน', `=COUNTIFS(Orders!$F$2:$F,"รับที่งาน"${exO})`, 'ออเดอร์'],
+    ['จัดส่ง', `=COUNTIFS(Orders!$F$2:$F,"จัดส่ง"${exO})`, 'ออเดอร์']
+  ];
+  sh.getRange(r + 1, 1, overview.length, 3).setValues(overview);
+  sh.getRange(r + 1, 2, overview.length, 1).setNumberFormat('#,##0').setFontWeight('bold').setHorizontalAlignment('right');
+  sh.getRange(r + 5, 1, 1, 3).setBackground(SOFT);
+  sh.getRange(r + 1, 1, overview.length, 3).setBorder(true, true, true, true, true, true, '#D4D4D8', SpreadsheetApp.BorderStyle.SOLID);
+
+  // 3) สถานะ
+  const sr = r;
+  sh.getRange(sr, 5).setValue('จำนวนออเดอร์ตามสถานะ (นับทุกออเดอร์)').setFontWeight('bold').setFontSize(12);
+  const st = ALL_STATUS.map(s => [s, `=COUNTIF(Orders!$C$2:$C,"${s}")`]);
+  st.push(['รวม', `=SUM(F${sr + 1}:F${sr + ALL_STATUS.length})`]);
+  sh.getRange(sr + 1, 5, st.length, 2).setValues(st);
+  sh.getRange(sr + 1, 6, st.length, 1).setFontWeight('bold').setHorizontalAlignment('center');
+  sh.getRange(sr + st.length, 5, 1, 2).setBackground(SOFT).setFontWeight('bold');
+  sh.getRange(sr + 1, 5, st.length, 2).setBorder(true, true, true, true, true, true, '#D4D4D8', SpreadsheetApp.BorderStyle.SOLID);
+
+  sh.setColumnWidth(1, 170);
+  for (let c = 2; c <= lastCol; c++) sh.setColumnWidth(c, 56);
+  sh.setColumnWidth(3, 70); sh.setColumnWidth(5, 130);
+  sh.setFrozenRows(0);
+  sh.getRange(headRow, 1, 1, lastCol).setFontColor('#FFFFFF');
+  sh.setTabColor(RED);
+}
+
+function buildScreenList_(ss) {
+  const sh = ss.getSheetByName(SCREEN_SHEET) || ss.insertSheet(SCREEN_SHEET, 1);
+  sh.clear(); sh.clearFormats();
+  const head = ['แบบ', 'ไซซ์', 'ชื่อบนเสื้อ', 'หมายเลข', 'เลขออเดอร์', 'ชื่อผู้สั่ง', 'สถานะ', '(ลำดับไซซ์)'];
+  sh.getRange(1, 1, 1, head.length).setValues([head]).setFontWeight('bold').setBackground('#E5251F').setFontColor('#FFFFFF');
+  sh.setFrozenRows(1);
+  const sizeList = '{' + SIZES.map(s => `"${s}"`).join(',') + '}';
+  const keep = EXCLUDE_STATUS.map(s => `,Items!J2:J<>"${s}"`).join('');
+  const f = `=IFERROR(SORT(FILTER({Items!C2:C,Items!D2:D,Items!E2:E,Items!F2:F,Items!A2:A,Items!H2:H,Items!J2:J,MATCH(Items!D2:D,${sizeList},0)},Items!A2:A<>""${keep}),1,TRUE,8,TRUE,4,TRUE),"ยังไม่มีออเดอร์")`;
+  sh.getRange(2, 1).setFormula(f);
+  sh.hideColumns(8);
+  sh.setColumnWidth(1, 150); sh.setColumnWidth(3, 170); sh.setColumnWidth(5, 110); sh.setColumnWidth(6, 160);
+}
+
+function colLetter_(n) {
+  let s = '';
+  while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
 /** กันข้อความที่ขึ้นต้นด้วย = + - @ ไม่ให้ชีตตีความเป็นสูตร */
 function safeCell_(v) {
   const s = String(v == null ? '' : v);
