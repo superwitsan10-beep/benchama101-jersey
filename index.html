@@ -150,6 +150,14 @@ select.in option{background:#18181C}
 .modal{position:fixed;inset:0;z-index:55;background:rgba(5,5,6,.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;padding:16px;animation:fade .2s}
 @media (min-width:600px){.modal{align-items:center}}
 .modal-card{width:min(440px,100%);max-height:88vh;overflow:auto;background:var(--surface2);border:1px solid var(--line2);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 70px rgba(0,0,0,.5);animation:in .3s var(--ease)}
+.ann{gap:14px;text-align:left}
+.ann-ic{width:52px;height:52px;border-radius:16px;background:var(--red);display:grid;place-items:center;box-shadow:0 10px 24px rgba(229,37,31,.35)}
+.ann h2{font-size:21px;line-height:1.3}
+.ann-list{margin:0;display:flex;flex-direction:column;border:1px solid var(--line2);border-radius:14px;overflow:hidden}
+.ann-list div{display:flex;justify-content:space-between;gap:14px;padding:12px 14px;border-top:1px solid var(--line)}
+.ann-list div:first-child{border-top:0}
+.ann-list dt{color:var(--muted);font-size:14px}
+.ann-list dd{margin:0;font-weight:600;font-size:14.5px;text-align:right}
 .sztable{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;font-size:15px}
 .sztable th{font-size:12.5px;font-weight:600;color:var(--muted);padding:8px 6px;border-bottom:1px solid var(--line2);text-align:center}
 .sztable td{padding:10px 6px;text-align:center;border-bottom:1px solid var(--line)}
@@ -532,6 +540,15 @@ details pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.4)
   </section>
 </div>
 
+<div class="modal" id="annModal" role="dialog" aria-modal="true" aria-labelledby="annTitle" hidden>
+  <div class="modal-card ann">
+    <div class="ann-ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></div>
+    <h2 id="annTitle"></h2>
+    <dl class="ann-list" id="annList"></dl>
+    <p class="hint" id="annNote" style="margin:0;font-size:13.5px;line-height:1.6"></p>
+    <button type="button" class="btn" id="annOk">รับทราบ</button>
+  </div>
+</div>
 <div class="modal" id="sizeModal" role="dialog" aria-modal="true" aria-labelledby="szTitle" hidden>
   <div class="modal-card">
     <div class="row"><h2 id="szTitle">ตารางไซซ์</h2><button type="button" class="iconbtn" id="szClose" aria-label="ปิดตารางไซซ์"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -558,6 +575,21 @@ details pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.4)
 (function(){
 /* ===== ตั้งค่า: วาง URL ของ Google Apps Script Web App ที่นี่ =====
    เว้นว่างไว้ = โหมดเดโม (ไม่บันทึกที่ไหน รันเลขออเดอร์ในเครื่อง) */
+/* ===== ประกาศ popup ตอนเข้าเว็บ =====
+   enabled: false = ปิดประกาศ
+   id: เปลี่ยนทุกครั้งที่แก้ข้อความ คนที่เคยกด "รับทราบ" จะได้เห็นประกาศใหม่ */
+const ANNOUNCE = {
+  enabled: true,
+  id: '2026-11-a',
+  title: 'เปิดพรีออเดอร์เสื้อ BENCHAMA101 2026/27',
+  lines: [
+    ['ปิดรับพรีออเดอร์', '[วันที่ปิดรับ]'],
+    ['ได้รับเสื้อประมาณ', '[ช่วงเวลา]'],
+    ['รับที่งาน', '[สถานที่ / วันที่]']
+  ],
+  note: 'โอนเงินแล้วแนบสลิปในขั้นตอนชำระเงิน · เช็กสถานะออเดอร์ได้ด้วยเบอร์มือถือที่มุมขวาบน',
+  button: 'รับทราบ'
+};
 const API_URL = 'https://script.google.com/macros/s/AKfycbzEo7OMlW_j7lcUMmZ7-jUrhBFkKfLA_W2nSH-re9K3S_Y7k2QrVS-d1JpF0XkbRg8Z/exec';
 
 const MODELS = {
@@ -974,9 +1006,31 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('lightbox').h
 Object.values(MODELS).forEach(m=>{ [m.img,m.back].forEach(u=>{ const i=new Image(); i.src=u; }); });
 renderItems(); go(1); route();
 
+/* ประกาศ: ขึ้นครั้งเดียวต่อเครื่อง (ต่อ id) หลังหน้าโหลดหายไป */
+let annReturn=null;
+function showAnnounce(){
+  if(!ANNOUNCE.enabled || location.hash==='#status') return;
+  try{ if(localStorage.getItem('bm-announce')===ANNOUNCE.id) return; }catch(e){}
+  $('annTitle').textContent=ANNOUNCE.title;
+  const dl=$('annList'); dl.textContent='';
+  (ANNOUNCE.lines||[]).forEach(([k,v])=>{ const d=document.createElement('div'); const dt=document.createElement('dt'); const dd=document.createElement('dd'); dt.textContent=k; dd.textContent=v; d.append(dt,dd); dl.appendChild(d); });
+  dl.hidden=!(ANNOUNCE.lines||[]).length;
+  $('annNote').textContent=ANNOUNCE.note||''; $('annNote').hidden=!ANNOUNCE.note;
+  $('annOk').textContent=ANNOUNCE.button||'รับทราบ';
+  annReturn=document.activeElement; $('annModal').hidden=false; $('annOk').focus();
+}
+function closeAnnounce(){
+  $('annModal').hidden=true;
+  try{ localStorage.setItem('bm-announce',ANNOUNCE.id); }catch(e){}
+  if(annReturn && annReturn.focus) annReturn.focus();
+}
+$('annOk').addEventListener('click',closeAnnounce);
+$('annModal').addEventListener('click',e=>{ if(e.target.id==='annModal') closeAnnounce(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('annModal').hidden) closeAnnounce(); });
+
 /* splash: แสดงเฉพาะครั้งแรกที่เปิดเว็บ (ต่อแท็บ) และหายเมื่อโหลดเสร็จจริง */
 (function(){
-  const sp=$('splash'); if(!sp || sp.classList.contains('skip')) return;
+  const sp=$('splash'); if(!sp || sp.classList.contains('skip')){ setTimeout(showAnnounce,300); return; }
   const bar=$('spBar'), t0=performance.now(), MIN=700, MAX=4000;
   const imgs=[...document.images].filter(i=>!i.closest('#splash'));
   const tasks=imgs.map(i=>i.complete?Promise.resolve():new Promise(r=>{i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true});}));
@@ -987,7 +1041,7 @@ renderItems(); go(1); route();
   function close(){
     if(closed) return; closed=true; bar.style.width='100%';
     const wait=Math.max(0,MIN-(performance.now()-t0));
-    setTimeout(()=>{ sp.classList.add('out'); try{sessionStorage.setItem('bm-splash','1');}catch(e){} setTimeout(()=>sp.remove(),600); },wait);
+    setTimeout(()=>{ sp.classList.add('out'); try{sessionStorage.setItem('bm-splash','1');}catch(e){} setTimeout(()=>{ sp.remove(); showAnnounce(); },600); },wait);
   }
   Promise.all(tasks).then(close); setTimeout(close,MAX);
 })();
