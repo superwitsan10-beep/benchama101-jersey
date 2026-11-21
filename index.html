@@ -150,6 +150,21 @@ select.in option{background:#18181C}
 .modal{position:fixed;inset:0;z-index:55;background:rgba(5,5,6,.8);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;padding:16px;animation:fade .2s}
 @media (min-width:600px){.modal{align-items:center}}
 .modal-card{width:min(440px,100%);max-height:88vh;overflow:auto;background:var(--surface2);border:1px solid var(--line2);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 30px 70px rgba(0,0,0,.5);animation:in .3s var(--ease)}
+.cd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px 12px 14px;border-radius:16px;background:linear-gradient(120deg,rgba(229,37,31,.22),rgba(229,37,31,.06));border:1px solid rgba(255,90,82,.35)}
+.cd-l{display:flex;flex-direction:column;gap:1px;min-width:0}
+.cd-l b{font-size:13.5px;font-weight:600;color:#FFD1CE;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.cd-l span{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.cd-t{display:flex;gap:5px;flex:none}
+.cd-t div{min-width:42px;padding:5px 2px 4px;border-radius:10px;background:rgba(0,0,0,.45);border:1px solid var(--line2);display:flex;flex-direction:column;align-items:center;line-height:1}
+.cd-t b{font-family:Kanit,sans-serif;font-weight:700;font-size:19px;font-variant-numeric:tabular-nums}
+.cd-t small{font-size:10px;color:var(--muted);margin-top:3px}
+.cd.urgent{background:linear-gradient(120deg,rgba(229,37,31,.45),rgba(229,37,31,.15));border-color:var(--red-hi)}
+.cd.urgent .cd-l b i{animation:blink 1s steps(2) infinite}
+.cd.closed{justify-content:center;background:rgba(255,255,255,.04);border-color:var(--line2)}
+@keyframes blink{50%{opacity:.2}}
+@media (max-width:430px){.cd-l span{display:none}}
+@media (max-width:370px){.cd-t div{min-width:36px}.cd-t b{font-size:16px}}
+@media (min-width:920px){.cd{flex-direction:column;align-items:stretch;gap:10px;padding:14px}.cd-t{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.cd-t div{padding:8px 2px 6px}.cd-t b{font-size:24px}}
 .ann{gap:14px;text-align:left}
 .ann-ic{width:52px;height:52px;border-radius:16px;background:var(--red);display:grid;place-items:center;box-shadow:0 10px 24px rgba(229,37,31,.35)}
 .ann h2{font-size:21px;line-height:1.3}
@@ -365,6 +380,15 @@ details pre{white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.4)
       <div class="lines" id="s1lines"></div>
       <div class="total"><span class="lbl" id="s1count">รวม 1 ตัว</span><b id="s1total">฿0</b></div>
       <button type="button" class="btn" id="to2">ถัดไป: ข้อมูลผู้สั่งซื้อ <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      <div class="cd" id="countdown" role="timer" aria-live="off">
+        <div class="cd-l"><b><i style="display:inline-flex"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></i>ปิดรับพรีออเดอร์ใน</b><span id="cdDate"></span></div>
+        <div class="cd-t" aria-hidden="true">
+          <div><b id="cdD">0</b><small>วัน</small></div>
+          <div><b id="cdH">00</b><small>ชม.</small></div>
+          <div><b id="cdM">00</b><small>นาที</small></div>
+          <div><b id="cdS">00</b><small>วิ</small></div>
+        </div>
+      </div>
     </aside>
   </section>
 
@@ -590,6 +614,8 @@ const ANNOUNCE = {
   note: 'โอนเงินแล้วแนบสลิปในขั้นตอนชำระเงิน · เช็กสถานะออเดอร์ได้ด้วยเบอร์มือถือที่มุมขวาบน',
   button: 'รับทราบ'
 };
+/* ===== เวลาปิดรับพรีออเดอร์ (นับถอยหลัง) — เวลาไทย ===== */
+const DEADLINE = '2026-11-30T23:59:59+07:00';
 const API_URL = 'https://script.google.com/macros/s/AKfycbzEo7OMlW_j7lcUMmZ7-jUrhBFkKfLA_W2nSH-re9K3S_Y7k2QrVS-d1JpF0XkbRg8Z/exec';
 
 const MODELS = {
@@ -1005,6 +1031,23 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('lightbox').h
 /* preload */
 Object.values(MODELS).forEach(m=>{ [m.img,m.back].forEach(u=>{ const i=new Image(); i.src=u; }); });
 renderItems(); go(1); route();
+
+/* countdown */
+(function(){
+  const end=new Date(DEADLINE).getTime(), box=$('countdown'); if(!box||isNaN(end)) return;
+  $('cdDate').textContent='ถึง '+new Date(end).toLocaleString('th-TH',{timeZone:'Asia/Bangkok',day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+' น.';
+  const pad=n=>String(n).padStart(2,'0');
+  let t;
+  function tick(){
+    const ms=end-Date.now();
+    if(ms<=0){ box.className='cd closed'; box.innerHTML='<b style="font-size:14px;color:var(--soft)">ปิดรับพรีออเดอร์แล้ว</b>'; clearInterval(t); return; }
+    const s=Math.floor(ms/1000), d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60), sec=s%60;
+    $('cdD').textContent=d; $('cdH').textContent=pad(h); $('cdM').textContent=pad(m); $('cdS').textContent=pad(sec);
+    box.classList.toggle('urgent', ms<86400000);
+    box.setAttribute('aria-label',`ปิดรับพรีออเดอร์ในอีก ${d} วัน ${h} ชั่วโมง ${m} นาที`);
+  }
+  tick(); t=setInterval(tick,1000);
+})();
 
 /* ประกาศ: ขึ้นครั้งเดียวต่อเครื่อง (ต่อ id) หลังหน้าโหลดหายไป */
 let annReturn=null;
